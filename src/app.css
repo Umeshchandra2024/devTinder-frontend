@@ -1,3 +1,17 @@
-
 @import "tailwindcss";
 @plugin "daisyui";
+
+/* Global polish */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply antialiased text-base-content bg-base-200 min-h-screen;
+}
+
+input:focus,
+button:focus-visible,
+a:focus-visible {
+  @apply outline-none ring-2 ring-primary/50 ring-offset-2 ring-offset-base-100;
+}

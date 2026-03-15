@@ -3,12 +3,15 @@ import NavBar from "./Navbar";
 import Footer from "./footer";
 
 const Body = () => {
-    return (
-        <div>
-            <NavBar />
-            <Outlet />
-            <Footer />
-        </div>
-    )
+  return (
+    <div className="flex min-h-screen flex-col">
+      <NavBar />
+      <main className="flex-1">
+        <Outlet />
+      </main>
+      <Footer />
+    </div>
+  );
 };
-export default Body
+
+export default Body;
