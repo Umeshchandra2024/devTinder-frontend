@@ -1,4 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
+import { normalizeListPayload, normalizeRequestsBundle } from "./apiNormalize";
 
 const requestSlice = createSlice({
   name: "request",
@@ -9,12 +10,18 @@ const requestSlice = createSlice({
     error: null,
   },
   reducers: {
+    setRequestsBundle: (state, action) => {
+      const { sent, received } = normalizeRequestsBundle(action.payload);
+      state.sent = sent;
+      state.received = received;
+      state.error = null;
+    },
     setSentRequests: (state, action) => {
-      state.sent = action.payload;
+      state.sent = normalizeListPayload(action.payload);
       state.error = null;
     },
     setReceivedRequests: (state, action) => {
-      state.received = action.payload;
+      state.received = normalizeListPayload(action.payload);
       state.error = null;
     },
     addSentRequest: (state, action) => {
@@ -47,6 +54,7 @@ const requestSlice = createSlice({
 });
 
 export const {
+  setRequestsBundle,
   setSentRequests,
   setReceivedRequests,
   addSentRequest,

@@ -18,6 +18,79 @@ const getSkillsString = (u) => {
   return Array.isArray(raw) ? raw.join(", ") : "";
 };
 
+/** Matches common Mongoose enums (avoid "" or Title Case, which fail many validators). */
+const normalizeGender = (g) => {
+  const s = String(g ?? "").trim().toLowerCase();
+  if (s === "male") return "male";
+  if (s === "female") return "female";
+  if (s === "others" || s === "other") return "others";
+  return "";
+};
+
+const GENDER_LABEL = { male: "Male", female: "Female", others: "Others" };
+
+const MAX_SKILLS = 10;
+/** Match Mongoose schema on your User model */
+const ABOUT_MIN = 10;
+const ABOUT_MAX = 200;
+
+/**
+ * Only allowed edit fields; omit optional empties so validateEditProfile + schema don’t reject
+ * e.g. gender: "", age: "". Omit about when empty so we don’t set about to "".
+ */
+const buildEditProfileBody = ({
+  firstName,
+  lastName,
+  photoURL,
+  age,
+  gender,
+  about,
+  skillsText,
+}) => {
+  const skillsList = skillsText
+    ? String(skillsText)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, MAX_SKILLS)
+    : [];
+
+  const body = {
+    firstName: String(firstName).trim(),
+    lastName: String(lastName).trim(),
+    // Backend allowlist uses camelCase "photoUrl", not "photoURL"
+    photoUrl: String(photoURL).trim(),
+    skills: skillsList,
+  };
+
+  const aboutTrim = String(about ?? "").trim();
+  if (aboutTrim.length >= ABOUT_MIN && aboutTrim.length <= ABOUT_MAX) {
+    body.about = aboutTrim;
+  }
+
+  const g = normalizeGender(gender);
+  if (g) body.gender = g;
+
+  const ageStr = String(age ?? "").trim();
+  if (ageStr !== "") {
+    const n = Number(ageStr);
+    if (!Number.isNaN(n) && Number.isFinite(n) && n >= 0) body.age = n;
+  }
+
+  return body;
+};
+
+const formatSaveError = (data) => {
+  if (data == null) return "Failed to save profile.";
+  if (typeof data === "string") return data;
+  if (typeof data === "object" && data.message) return String(data.message);
+  try {
+    return JSON.stringify(data);
+  } catch {
+    return "Failed to save profile.";
+  }
+};
+
 const EditProfile = () => {
   const user = useSelector((state) => state.user);
   const dispatch = useDispatch();
@@ -37,40 +110,48 @@ const EditProfile = () => {
     const u = user?.user ?? user?.data ?? user;
     setFirstName(pick(u, "firstName", "first_name"));
     setLastName(pick(u, "lastName", "last_name"));
-    setPhotoURL(pick(u, "photoURL", "photo_url"));
+    setPhotoURL(pick(u, "photoUrl", "photoURL", "photo_url"));
     setAge(u?.age ?? u?.user?.age ?? "");
-    setGender(pick(u, "gender"));
+    setGender(normalizeGender(pick(u, "gender")));
     setAbout(u?.about ?? u?.user?.about ?? "");
     setSkills(getSkillsString(u) || getSkillsString(user));
   }, [user]);
 
   const saveProfile = async () => {
     setError("");
+    const aboutLen = String(about ?? "").trim().length;
+    if (
+      aboutLen > 0 &&
+      (aboutLen < ABOUT_MIN || aboutLen > ABOUT_MAX)
+    ) {
+      setError(
+        `About must be between ${ABOUT_MIN} and ${ABOUT_MAX} characters (or leave it empty to leave your current bio unchanged).`
+      );
+      return;
+    }
     try {
-      const res = await axios.post(
-        BASE_URL + "/profile/edit",
-        {
+      const res = await axios.patch(
+        `${BASE_URL}/profile/edit`,
+        buildEditProfileBody({
           firstName,
           lastName,
           photoURL,
           age,
           gender,
           about,
-          skills: skills ? skills.split(",").map((s) => s.trim()).filter(Boolean) : [],
-        },
-        { withCredentials: true }
+          skillsText: skills,
+        }),
+        {
+          withCredentials: true,
+          headers: { "Content-Type": "application/json" },
+        }
       );
-      const userPayload = res.data?.user ?? res.data?.data ?? res.data;
+      const userPayload = res.data?.data ?? res.data?.user ?? res.data;
       dispatch(addUser(userPayload));
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
     } catch (err) {
-      const errMsg = err.response?.data;
-      setError(
-        typeof errMsg === "string"
-          ? errMsg
-          : errMsg?.message ?? "Failed to save profile."
-      );
+      setError(formatSaveError(err.response?.data));
     }
   };
 
@@ -79,9 +160,15 @@ const EditProfile = () => {
     lastName,
     photoURL,
     age,
-    gender,
+    gender: GENDER_LABEL[gender] || gender,
     about,
-    skills: skills ? skills.split(",").map((s) => s.trim()).filter(Boolean) : [],
+    skills: skills
+      ? skills
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .slice(0, MAX_SKILLS)
+      : [],
   };
 
   return (
@@ -148,7 +235,7 @@ const EditProfile = () => {
                       role="button"
                       className="btn btn-outline w-full justify-between"
                     >
-                      {gender || "Select gender"}
+                      {GENDER_LABEL[gender] || gender || "Select gender"}
                       <span className="text-base-content/60">▼</span>
                     </div>
                     <ul
@@ -158,7 +245,7 @@ const EditProfile = () => {
                       <li>
                         <button
                           type="button"
-                          onClick={() => setGender("Male")}
+                          onClick={() => setGender("male")}
                         >
                           Male
                         </button>
@@ -166,7 +253,7 @@ const EditProfile = () => {
                       <li>
                         <button
                           type="button"
-                          onClick={() => setGender("Female")}
+                          onClick={() => setGender("female")}
                         >
                           Female
                         </button>
@@ -174,7 +261,7 @@ const EditProfile = () => {
                       <li>
                         <button
                           type="button"
-                          onClick={() => setGender("Others")}
+                          onClick={() => setGender("others")}
                         >
                           Others
                         </button>
@@ -197,11 +284,16 @@ const EditProfile = () => {
                 <div className="form-control">
                   <label className="label">
                     <span className="label-text">About</span>
+                    <span className="label-text-alt text-base-content/60">
+                      {about.trim().length}/{ABOUT_MAX} · {ABOUT_MIN}–{ABOUT_MAX}{" "}
+                      chars if you change it
+                    </span>
                   </label>
                   <textarea
                     value={about}
                     onChange={(e) => setAbout(e.target.value)}
-                    placeholder="Short bio..."
+                    placeholder={`At least ${ABOUT_MIN} characters when you add a bio…`}
+                    maxLength={ABOUT_MAX}
                     className="textarea textarea-bordered w-full"
                     rows={3}
                   />
@@ -222,7 +314,7 @@ const EditProfile = () => {
             </div>
           </div>
         </div>
-        <UserCard user={previewUser} />
+        <UserCard user={previewUser} showActions={false} />
       </div>
       {showToast && (
         <div className="toast toast-top toast-center z-50 pt-20">

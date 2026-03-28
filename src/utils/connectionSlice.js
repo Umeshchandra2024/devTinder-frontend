@@ -1,4 +1,5 @@
 import { createSlice } from "@reduxjs/toolkit";
+import { normalizeListPayload } from "./apiNormalize";
 
 const connectionSlice = createSlice({
   name: "connection",
@@ -9,7 +10,7 @@ const connectionSlice = createSlice({
   },
   reducers: {
     setConnections: (state, action) => {
-      state.list = action.payload;
+      state.list = normalizeListPayload(action.payload);
       state.error = null;
     },
     addConnection: (state, action) => {

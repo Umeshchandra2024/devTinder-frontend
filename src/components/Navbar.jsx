@@ -4,6 +4,8 @@ import { useSelector, useDispatch } from "react-redux";
 import { BASE_URL } from "../utils/constants";
 import { removeUser } from "../utils/userSlice";
 import { removeFeed } from "../utils/feedSlice";
+import { clearConnections } from "../utils/connectionSlice";
+import { clearRequests } from "../utils/requestSlice";
 
 const NavBar = () => {
   const user = useSelector((store) => store.user);
@@ -22,6 +24,7 @@ const NavBar = () => {
 
   const avatarUrl =
     user?.photoURL ||
+    user?.photoUrl ||
     user?.avatar ||
     "https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp";
 
@@ -36,7 +39,11 @@ const NavBar = () => {
       // ignore logout network errors on client
     } finally {
       dispatch(removeUser());
+      // Redux only (no API / MongoDB). Drop cached lists so the next session refetches
+      // feed, connections, and requests instead of showing another user’s stale data.
       dispatch(removeFeed());
+      dispatch(clearConnections());
+      dispatch(clearRequests());
       navigate("/login");
     }
   };

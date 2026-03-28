@@ -1,9 +1,74 @@
-import { useSelector } from "react-redux";
+import axios from "axios";
+import { useEffect } from "react";
+import { Link } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  BASE_URL,
+  API_USER_CONNECTIONS,
+} from "../utils/constants";
+import { unwrapConnectionProfile } from "../utils/apiNormalize";
+import {
+  setConnections,
+  setConnectionError,
+} from "../utils/connectionSlice";
 
 const Connections = () => {
-  const connections = useSelector((state) => state.connection?.list ?? []);
+  const dispatch = useDispatch();
+  const user = useSelector((state) => state.user);
+  const connections = useSelector((state) => {
+    const list = state.connection?.list;
+    return Array.isArray(list) ? list : [];
+  });
+  const loadError = useSelector((state) => state.connection?.error);
 
-  const hasConnections = connections && connections.length > 0;
+  useEffect(() => {
+    if (!user) return;
+    if (connections.length > 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      dispatch(setConnectionError(null));
+      try {
+        const res = await axios.get(`${BASE_URL}${API_USER_CONNECTIONS}`, {
+          withCredentials: true,
+        });
+        if (!cancelled) dispatch(setConnections(res.data));
+      } catch (err) {
+        if (!cancelled && err.response?.status !== 401) {
+          dispatch(
+            setConnectionError(
+              err.response?.data?.message ??
+                "Could not load connections. Check API path in constants.js."
+            )
+          );
+          console.error(err);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, connections.length, dispatch]);
+
+  if (!user) {
+    return (
+      <div className="mx-auto flex max-w-lg flex-col items-center gap-4 px-4 py-20 text-center">
+        <h1 className="text-2xl font-semibold text-base-content">
+          Sign in to see connections
+        </h1>
+        <p className="text-sm text-base-content/70">
+          Log in to load people you&apos;re connected with.
+        </p>
+        <Link to="/login" className="btn btn-primary">
+          Log in
+        </Link>
+      </div>
+    );
+  }
+
+  const hasConnections = connections.length > 0;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10">
@@ -24,7 +89,11 @@ const Connections = () => {
           )}
         </div>
 
-        {!hasConnections ? (
+        {loadError && (
+          <p className="mt-4 text-center text-sm text-error">{loadError}</p>
+        )}
+
+        {!hasConnections && !loadError ? (
           <div className="mt-8 rounded-xl border border-dashed border-base-300 bg-base-200/60 p-8 text-center">
             <h2 className="text-base font-semibold text-base-content">
               No connections yet
@@ -34,66 +103,82 @@ const Connections = () => {
               network.
             </p>
           </div>
-        ) : (
+        ) : null}
+
+        {hasConnections ? (
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {connections.map((conn) => (
-              <article
-                key={conn._id ?? conn.id}
-                className="card border border-base-300 bg-base-100 shadow-sm transition hover:shadow-md"
-              >
-                <div className="card-body gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="avatar placeholder">
-                      <div className="w-10 rounded-full bg-primary/10 text-primary">
-                        <span className="text-sm font-semibold">
-                          {(conn.firstName ?? conn.name ?? "?")
-                            .toString()
-                            .charAt(0)
-                            .toUpperCase()}
-                        </span>
+            {connections.map((conn) => {
+              const profile = unwrapConnectionProfile(conn);
+              const key = conn._id ?? conn.id ?? profile?._id ?? profile?.id;
+              const profileId =
+                profile?._id ??
+                profile?.id ??
+                conn?.toUserId?._id ??
+                conn?.toUserId?.id ??
+                conn?.fromUserId?._id ??
+                conn?.fromUserId?.id;
+              return (
+                <article
+                  key={key}
+                  className="card border border-base-300 bg-base-100 shadow-sm transition hover:shadow-md"
+                >
+                  <div className="card-body gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="avatar">
+                        <div className="w-10 rounded-full">
+                          <img
+                            alt=""
+                            src={
+                              profile?.photoURL ||
+                              profile?.photoUrl ||
+                              "https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp"
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <h2 className="font-semibold text-base-content">
+                          {profile?.firstName} {profile?.lastName}
+                        </h2>
+                        {profile?.title && (
+                          <p className="text-xs text-base-content/70">
+                            {profile.title}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <div>
-                      <h2 className="font-semibold text-base-content">
-                        {conn.firstName} {conn.lastName}
-                      </h2>
-                      {conn.title && (
-                        <p className="text-xs text-base-content/70">
-                          {conn.title}
-                        </p>
+                    {profile?.about && (
+                      <p className="line-clamp-2 text-sm text-base-content/80">
+                        {profile.about}
+                      </p>
+                    )}
+                    {Array.isArray(profile?.skills) &&
+                      profile.skills.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {profile.skills.slice(0, 5).map((skill, idx) => (
+                            <span
+                              key={idx}
+                              className="badge badge-sm badge-outline text-xs"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
                       )}
+                    <div className="card-actions justify-end pt-1">
+                      <Link
+                        to={profileId ? `/connections/${profileId}` : "/connections"}
+                        className="btn btn-ghost btn-xs text-primary"
+                      >
+                        View profile
+                      </Link>
                     </div>
                   </div>
-                  {conn.about && (
-                    <p className="line-clamp-2 text-sm text-base-content/80">
-                      {conn.about}
-                    </p>
-                  )}
-                  {Array.isArray(conn.skills) && conn.skills.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {conn.skills.slice(0, 5).map((skill, idx) => (
-                        <span
-                          key={idx}
-                          className="badge badge-sm badge-outline text-xs"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <div className="card-actions justify-end pt-1">
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-xs text-primary"
-                    >
-                      View profile
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

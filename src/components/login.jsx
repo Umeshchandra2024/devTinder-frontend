@@ -4,6 +4,7 @@ import { useDispatch } from "react-redux";
 import { addUser } from "../utils/userSlice";
 import { useNavigate } from "react-router-dom";
 import { BASE_URL } from "../utils/constants";
+import { fetchCurrentUser } from "../utils/userApi";
 
 const Login = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -45,6 +46,12 @@ const Login = () => {
       );
       const userPayload = res.data?.user ?? res.data?.data ?? res.data;
       dispatch(addUser(userPayload));
+      try {
+        const fullUser = await fetchCurrentUser();
+        dispatch(addUser(fullUser));
+      } catch {
+        /* keep login payload if profile view fails */
+      }
       navigate("/");
     } catch (err) {
       const status = err.response?.status;
@@ -90,6 +97,12 @@ const Login = () => {
       );
       const userPayload = res.data?.user ?? res.data?.data ?? res.data;
       dispatch(addUser(userPayload));
+      try {
+        const fullUser = await fetchCurrentUser();
+        dispatch(addUser(fullUser));
+      } catch {
+        /* keep signup payload if profile view fails */
+      }
       navigate("/");
     } catch (err) {
       setError(
