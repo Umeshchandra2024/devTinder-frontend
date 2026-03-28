@@ -1,5 +1,12 @@
 @import "tailwindcss";
-@plugin "daisyui";
+/*
+ * DaisyUI 5 default is only light + prefers-color-scheme dark.
+ * Without listing "business", `data-theme="business"` in index.html does nothing in production,
+ * so :root stays light → white page. Force business as the default theme.
+ */
+@plugin "daisyui" {
+  themes: business --default;
+}
 
 /* Global polish */
 html {
